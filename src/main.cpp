@@ -26,86 +26,201 @@
 #include <Arduino.h>
 
 // ########################## DEFINES ##########################
-#define HOVER_SERIAL_BAUD 115200 // [-] Baud rate for Serial (used to communicate with the hoverboard)
-#define SERIAL_BAUD 115200       // [-] Baud rate for built-in Serial (used for the Serial Monitor)
-#define START_FRAME 0xABCD       // [-] Start frme definition for reliable serial communication
-#define TIME_SEND 100            // [ms] Sending time interval
+#define HOVER_SERIAL_BAUD 115200               // [-] Baud rate for Serial (used to communicate with the hoverboard)
+#define SERIAL_BAUD 921600                     // [-] Baud rate for built-in Serial (used for the Serial Monitor)
+#define SERIAL_START_FRAME_ESC_TO_DISPLAY 0x5A // [-] Start frame definition for serial commands
+#define SERIAL_START_FRAME_DISPLAY_TO_ESC 0xA5 // [-] Start frame definition for serial commands
+#define TIME_SEND 10                           // [ms] Sending time interval
+
 // #define DEBUG_RX                        // [-] Debug received data. Prints all bytes to serial (comment-out to disable)
 
-#define DEBUG 0
-#define PIN_IN_BRAKE 34
-#define SECURITY_OFFSET 20
+#define DEBUG                         1
+#define PIN_THROTTLE                  34
+#define PIN_BRAKE                     35
+#define SECURITY_OFFSET               25
+
+#define BAUD_RATE_SMARTESC            115200
+#define PIN_SERIAL_ESP_TO_CNTRL       27
+#define PIN_SERIAL_CNTRL_TO_ESP       14
 
 // Global variables
-uint8_t idx = 0;        // Index for new data pointer
-uint16_t bufStartFrame; // Buffer Start Frame
-byte *p;                // Pointer declaration for the new received data
+uint8_t idx = 0;       // Index for new data pointer
+uint8_t bufStartFrame; // Buffer Start Frame
+byte *p;               // Pointer declaration for the new received data
 byte incomingByte;
 byte incomingBytePrev;
 
-int32_t analogValue = 0;
-uint16_t analogValueRaw = 0;
-uint16_t analogValueMinCalibRaw = 0;
+// Trottle
+int32_t analogValueThrottle = 0;
+uint16_t analogValueThrottleRaw = 0;
+uint16_t analogValueThrottleMinCalibRaw = 0;
+
+// Brake
+int32_t analogValueBrake = 0;
+uint16_t analogValueBrakeRaw = 0;
+uint16_t analogValueBrakeMinCalibRaw = 0;
 
 char print_buffer[500];
 
 typedef struct
 {
-  uint16_t start;
-  int16_t steer;
-  int16_t speed;
-  uint16_t checksum;
+  uint8_t Frame_start;
+  uint8_t Type;
+  uint8_t Destination;
+  uint8_t Number_of_ESC;
+  uint8_t BMS_protocol;
+  uint8_t ESC_Jumps;
+  uint8_t Display_Version_Maj;
+  uint8_t Display_Version_Main;
+  uint8_t Power_ON;
+  uint8_t Throttle;
+  uint8_t Brake;
+  uint8_t Torque;
+  uint8_t Brake_torque;
+  uint8_t Lock;
+  uint8_t Regulator;
+  uint8_t Motor_direction;
+  uint8_t Hall_sensors_direction;
+  uint8_t Ligth_power;
+  uint8_t Max_temperature_reduce;
+  uint8_t Max_temperature_shutdown;
+  uint8_t Speed_limit_;
+  uint8_t Motor_start_speed;
+  uint8_t CRC8;
 } SerialCommand;
-SerialCommand Command;
+SerialCommand command;
 
 typedef struct
 {
-  uint16_t start;
-  int16_t cmd1;
-  int16_t cmd2;
-  int16_t speedR_meas;
-  int16_t speedL_meas;
-  int16_t batVoltage;
-  int16_t boardTemp;
-  uint16_t cmdLed;
-  uint16_t checksum;
+
+  uint8_t Frame_start;
+  uint8_t Type;
+  uint8_t ESC_Version_Maj;
+  uint8_t ESC_Version_Min;
+  uint8_t Throttle;
+  uint8_t Brake;
+  uint8_t Controller_Voltage_LSB;
+  uint8_t Controller_Voltage_MSB;
+  uint8_t Controller_Current_LSB;
+  uint8_t Controller_Current_MSB;
+  uint8_t MOSFET_temperature;
+  uint8_t ERPM_LSB;
+  uint8_t ERPM_MSB;
+  uint8_t Lock_status;
+  uint8_t Ligth_status;
+  uint8_t Regulator_status;
+  uint8_t Phase_1_current_max_LSB;
+  uint8_t Phase_1_current_max_MSB;
+  uint8_t Phase_1_voltage_max_LSB;
+  uint8_t Phase_1_voltage_max_MSB;
+  uint8_t BMS_Version_Maj;
+  uint8_t BMS_Version_Min;
+  uint8_t BMS_voltage_LSB;
+  uint8_t BMS_voltage_MSB;
+  uint8_t BMS_Current_LSB;
+  uint8_t BMS_Current_MSB;
+  uint8_t BMS_Cells_status_group_1;
+  uint8_t BMS_Cells_status_group_2;
+  uint8_t BMS_Cells_status_group_3;
+  uint8_t BMS_Cells_status_group_4;
+  uint8_t BMS_Cells_status_group_5;
+  uint8_t BMS_Cells_status_group_6;
+  uint8_t BMS_Cells_status_group_7;
+  uint8_t BMS_Cells_status_group_8;
+  uint8_t BMS_Cells_status_group_9;
+  uint8_t BMS_Cells_status_group_10;
+  uint8_t BMS_Cells_status_group_11;
+  uint8_t BMS_Cells_status_group_12;
+  uint8_t BMS_Cells_status_group_13;
+  uint8_t BMS_Cells_status_group_14;
+  uint8_t BMS_Cells_status_group_15;
+  uint8_t BMS_Cells_status_group_16;
+  uint8_t BMS_Cells_status_group_17;
+  uint8_t BMS_Cells_status_group_18;
+  uint8_t BMS_Cells_status_group_19;
+  uint8_t BMS_Cells_status_group_20;
+  uint8_t BMS_Cells_status_group_21;
+  uint8_t BMS_Cells_status_group_22;
+  uint8_t BMS_Cells_status_group_23;
+  uint8_t BMS_Cells_status_group_24;
+  uint8_t BMS_Battery_tempature_1;
+  uint8_t BMS_Battery_tempature_2;
+  uint8_t BMS_Charge_cycles_full_LSB;
+  uint8_t BMS_Charge_cycles_full_MSB;
+  uint8_t BMS_Charge_cycles_partial_LSB;
+  uint8_t BMS_Charge_cycles_partial_MSB;
+  uint8_t Errors_LSB;
+  uint8_t Errors_MSB;
+  uint8_t CRC8;
 } SerialFeedback;
-SerialFeedback Feedback;
-SerialFeedback NewFeedback;
+SerialFeedback feedback;
+SerialFeedback newFeedback;
+
+HardwareSerial hwSerCntrl(1);
+
 
 // ########################## SETUP ##########################
 void setup()
 {
   Serial.begin(SERIAL_BAUD);
-  Serial.println("Hoverboard Serial v1.0");
+  Serial.println("SmartESC Serial v1.0");
 
-  pinMode(PIN_IN_BRAKE, INPUT);
-  analogValueMinCalibRaw = analogRead(PIN_IN_BRAKE);
+  pinMode(PIN_THROTTLE, INPUT);
+  pinMode(PIN_BRAKE, INPUT);
 
-  Serial2.begin(HOVER_SERIAL_BAUD);
+  // do it twice to improve values
+  analogValueThrottleMinCalibRaw = analogRead(PIN_THROTTLE);
+  analogValueBrakeMinCalibRaw = analogRead(PIN_BRAKE);
+  analogValueThrottleMinCalibRaw = analogRead(PIN_THROTTLE);
+  analogValueBrakeMinCalibRaw = analogRead(PIN_BRAKE);
+
+  hwSerCntrl.begin(BAUD_RATE_SMARTESC, SERIAL_8N1, PIN_SERIAL_CNTRL_TO_ESP, PIN_SERIAL_ESP_TO_CNTRL);
 }
 
 // ########################## SEND ##########################
-void Send(int16_t uSteer, int16_t uSpeed)
+void Send(int16_t brake, int16_t throttle)
 {
   // Create command
-  Command.start = (uint16_t)START_FRAME;
-  Command.steer = (int16_t)uSteer;
-  Command.speed = (int16_t)uSpeed;
-  Command.checksum = (uint16_t)(Command.start ^ Command.steer ^ Command.speed);
+  command.Frame_start = (uint16_t)SERIAL_START_FRAME_DISPLAY_TO_ESC;
+  command.Brake = (int16_t)brake;
+  command.Throttle = (int16_t)throttle;
+
+  command.CRC8 = (uint8_t)(
+      command.Frame_start ^ command.Type //
+      ^ command.Destination              //
+      ^ command.Number_of_ESC            //
+      ^ command.BMS_protocol             //
+      ^ command.ESC_Jumps                //
+      ^ command.Display_Version_Maj      //
+      ^ command.Display_Version_Main     //
+      ^ command.Power_ON                 //
+      ^ command.Throttle                 //
+      ^ command.Brake                    //
+      ^ command.Torque                   //
+      ^ command.Brake_torque             //
+      ^ command.Lock                     //
+      ^ command.Regulator                //
+      ^ command.Motor_direction          //
+      ^ command.Hall_sensors_direction   //
+      ^ command.Ligth_power              //
+      ^ command.Max_temperature_reduce   //
+      ^ command.Max_temperature_shutdown //
+      ^ command.Speed_limit_             //
+      ^ command.Motor_start_speed        //
+  );
 
   // Write to Serial
-  Serial2.write((uint8_t *)&Command, sizeof(Command));
+  hwSerCntrl.write((uint8_t *)&command, sizeof(command));
 }
 
 // ########################## RECEIVE ##########################
 void Receive()
 {
   // Check for new data availability in the Serial buffer
-  if (Serial2.available())
+  if (hwSerCntrl.available())
   {
-    incomingByte = Serial2.read();                                       // Read the incoming byte
-    bufStartFrame = ((uint16_t)(incomingByte) << 8) | incomingBytePrev; // Construct the start frame
+    incomingByte = hwSerCntrl.read(); // Read the incoming byte
+    bufStartFrame = incomingByte;     // Construct the start frame
   }
   else
   {
@@ -114,51 +229,107 @@ void Receive()
 
 // If DEBUG_RX is defined print all incoming bytes
 #ifdef DEBUG_RX
-  Serial.print(incomingByte);
-  return;
+//  Serial.printf("%02x\n", incomingByte);
 #endif
 
   // Copy received data
-  if (bufStartFrame == START_FRAME)
-  { // Initialize if new data is detected
-    p = (byte *)&NewFeedback;
-    *p++ = incomingBytePrev;
+  if ((bufStartFrame == SERIAL_START_FRAME_ESC_TO_DISPLAY) && (idx == 0))
+  {
+    // Initialize if new data is detected
+    //Serial.println("SERIAL_START_FRAME_ESC_TO_DISPLAY detected");
+    p = (byte *)&newFeedback;
     *p++ = incomingByte;
-    idx = 2;
+    idx = 1;
+    //Serial.printf(">>>\nincomingByte = %02x / idx = %d\n",incomingByte, idx -1 );
   }
-  else if (idx >= 2 && idx < sizeof(SerialFeedback))
+  else if (idx >= 1 && idx < sizeof(SerialFeedback))
   { // Save the new received data
     *p++ = incomingByte;
     idx++;
+    //Serial.printf("incomingByte = %02x / idx = %d\n",incomingByte, idx -1);
   }
 
   // Check if we reached the end of the package
   if (idx == sizeof(SerialFeedback))
   {
-    uint16_t checksum;
-    checksum = (uint16_t)(NewFeedback.start ^ NewFeedback.cmd1 ^ NewFeedback.cmd2 ^ NewFeedback.speedR_meas ^ NewFeedback.speedL_meas ^ NewFeedback.batVoltage ^ NewFeedback.boardTemp ^ NewFeedback.cmdLed);
+
+    uint8_t checksum;
+    checksum = (uint8_t)(
+        //
+        newFeedback.Frame_start                     //
+        ^ newFeedback.Type                          //
+        ^ newFeedback.ESC_Version_Maj               //
+        ^ newFeedback.ESC_Version_Min               //
+        ^ newFeedback.Throttle                      //
+        ^ newFeedback.Brake                         //
+        ^ newFeedback.Controller_Voltage_LSB        //
+        ^ newFeedback.Controller_Voltage_MSB        //
+        ^ newFeedback.Controller_Current_LSB        //
+        ^ newFeedback.Controller_Current_MSB        //
+        ^ newFeedback.MOSFET_temperature            //
+        ^ newFeedback.ERPM_LSB                      //
+        ^ newFeedback.ERPM_MSB                      //
+        ^ newFeedback.Lock_status                   //
+        ^ newFeedback.Ligth_status                  //
+        ^ newFeedback.Regulator_status              //
+        ^ newFeedback.Phase_1_current_max_LSB       //
+        ^ newFeedback.Phase_1_current_max_MSB       //
+        ^ newFeedback.Phase_1_voltage_max_LSB       //
+        ^ newFeedback.Phase_1_voltage_max_MSB       //
+        ^ newFeedback.BMS_Version_Maj               //
+        ^ newFeedback.BMS_Version_Min               //
+        ^ newFeedback.BMS_voltage_LSB               //
+        ^ newFeedback.BMS_voltage_MSB               //
+        ^ newFeedback.BMS_Current_LSB               //
+        ^ newFeedback.BMS_Current_MSB               //
+        ^ newFeedback.BMS_Cells_status_group_1      //
+        ^ newFeedback.BMS_Cells_status_group_2      //
+        ^ newFeedback.BMS_Cells_status_group_3      //
+        ^ newFeedback.BMS_Cells_status_group_4      //
+        ^ newFeedback.BMS_Cells_status_group_5      //
+        ^ newFeedback.BMS_Cells_status_group_6      //
+        ^ newFeedback.BMS_Cells_status_group_7      //
+        ^ newFeedback.BMS_Cells_status_group_8      //
+        ^ newFeedback.BMS_Cells_status_group_9      //
+        ^ newFeedback.BMS_Cells_status_group_10     //
+        ^ newFeedback.BMS_Cells_status_group_11     //
+        ^ newFeedback.BMS_Cells_status_group_12     //
+        ^ newFeedback.BMS_Cells_status_group_13     //
+        ^ newFeedback.BMS_Cells_status_group_14     //
+        ^ newFeedback.BMS_Cells_status_group_15     //
+        ^ newFeedback.BMS_Cells_status_group_16     //
+        ^ newFeedback.BMS_Cells_status_group_17     //
+        ^ newFeedback.BMS_Cells_status_group_18     //
+        ^ newFeedback.BMS_Cells_status_group_19     //
+        ^ newFeedback.BMS_Cells_status_group_20     //
+        ^ newFeedback.BMS_Cells_status_group_21     //
+        ^ newFeedback.BMS_Cells_status_group_22     //
+        ^ newFeedback.BMS_Cells_status_group_23     //
+        ^ newFeedback.BMS_Cells_status_group_24     //
+        ^ newFeedback.BMS_Battery_tempature_1       //
+        ^ newFeedback.BMS_Battery_tempature_2       //
+        ^ newFeedback.BMS_Charge_cycles_full_LSB    //
+        ^ newFeedback.BMS_Charge_cycles_full_MSB    //
+        ^ newFeedback.BMS_Charge_cycles_partial_LSB //
+        ^ newFeedback.BMS_Charge_cycles_partial_MSB //
+        ^ newFeedback.Errors_LSB                    //
+        ^ newFeedback.Errors_MSB                    //
+    );
+
+    //Serial.printf("checksum = %02x / newFeedback.CRC8 = %02x\n",checksum, newFeedback.CRC8);
 
     // Check validity of the new data
-    if (NewFeedback.start == START_FRAME && checksum == NewFeedback.checksum)
+    if (newFeedback.Frame_start == SERIAL_START_FRAME_ESC_TO_DISPLAY && checksum == newFeedback.CRC8)
     {
       // Copy the new data
-      memcpy(&Feedback, &NewFeedback, sizeof(SerialFeedback));
+      memcpy(&feedback, &newFeedback, sizeof(SerialFeedback));
 
       // Print data to built-in Serial
-      Serial.print("1: ");
-      Serial.print(Feedback.cmd1);
-      Serial.print(" 2: ");
-      Serial.print(Feedback.cmd2);
-      Serial.print(" 3: ");
-      Serial.print(Feedback.speedR_meas);
-      Serial.print(" 4: ");
-      Serial.print(Feedback.speedL_meas);
-      Serial.print(" 5: ");
-      Serial.print(Feedback.batVoltage);
-      Serial.print(" 6: ");
-      Serial.print(Feedback.boardTemp);
-      Serial.print(" 7: ");
-      Serial.println(Feedback.cmdLed);
+      Serial.print("Throttle = ");
+      Serial.print(feedback.Throttle);
+      Serial.print(" / Brake = ");
+      Serial.print(feedback.Brake);
+      Serial.println();
     }
     else
     {
@@ -188,21 +359,30 @@ void loop(void)
   iTimeSend = timeNow + TIME_SEND;
 
   // Compute throttle
-  analogValueRaw = analogRead(PIN_IN_BRAKE);
-  analogValue = analogValueRaw - analogValueMinCalibRaw - SECURITY_OFFSET;
-  //analogValue = analogValue / 1.8;
+  analogValueThrottleRaw = analogRead(PIN_THROTTLE);
+  analogValueThrottle = analogValueThrottleRaw - analogValueThrottleMinCalibRaw - SECURITY_OFFSET;
+  analogValueThrottle = analogValueThrottle / 4;
+  if (analogValueThrottle > 255)
+    analogValueThrottle = 255;
+  if (analogValueThrottle < 0)
+    analogValueThrottle = 0;
 
-  if (analogValue > 1000)
-    analogValue = 1000;
-  if (analogValue < 0)
-    analogValue = 0;
+  // Compute brake
+  analogValueBrakeRaw = analogRead(PIN_BRAKE);
+  analogValueBrake = analogValueBrakeRaw - analogValueBrakeMinCalibRaw - SECURITY_OFFSET;
+  analogValueBrake = analogValueBrake / 4;
+  if (analogValueBrake > 255)
+    analogValueBrake = 255;
+  if (analogValueBrake < 0)
+    analogValueBrake = 0;
 
 #if DEBUG
-  Serial.println("analogValueRaw = " + (String)analogValueRaw + " / analogValueMinCalibRaw = " + analogValueMinCalibRaw);
+//  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
+//  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
 #endif
 
   // Send commands
-  Send(0, analogValue);
+  Send(analogValueBrake, analogValueThrottle);
 }
 
 // ########################## END ##########################
