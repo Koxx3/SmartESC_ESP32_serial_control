@@ -4,6 +4,7 @@
 //  for   https://github.com/EmanuelFeru/hoverboard-firmware-hack-FOC
 //
 //  Copyright (C) 2019-2020 Emanuel FERU <aerdronix@gmail.com>
+//  Copyright (C) 2020 Francois DESLANDES <koxx33@gmail.com>
 //
 // *******************************************************************
 // INFO:
