@@ -326,11 +326,13 @@ void Receive()
       memcpy(&feedback, &newFeedback, sizeof(SerialFeedback));
 
       // Print data to built-in Serial
+      /*
       Serial.print("Throttle = ");
       Serial.print(feedback.Throttle);
       Serial.print(" / Brake = ");
       Serial.print(feedback.Brake);
       Serial.println();
+      */
     }
     else
     {
@@ -371,15 +373,17 @@ void loop(void)
   // Compute brake
   analogValueBrakeRaw = analogRead(PIN_BRAKE);
   analogValueBrake = analogValueBrakeRaw - analogValueBrakeMinCalibRaw - SECURITY_OFFSET;
-  analogValueBrake = analogValueBrake / 4;
+  analogValueBrake = analogValueBrake / 3;
   if (analogValueBrake > 255)
     analogValueBrake = 255;
   if (analogValueBrake < 0)
     analogValueBrake = 0;
 
+int16_t speed = ((int16_t) feedback.ERPM_LSB) | (((int16_t) feedback.ERPM_MSB) << 8);
+
 #if DEBUG
-//  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
-  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
+  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle + " / feedback.Throttle = " + (String)feedback.Throttle + " / feedback.ERPM = "+ (String)speed);
+//  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
 #endif
 
   // Send commands
