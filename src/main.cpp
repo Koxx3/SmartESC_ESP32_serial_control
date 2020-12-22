@@ -37,7 +37,7 @@
 #define DEBUG                         1
 #define PIN_THROTTLE                  34
 #define PIN_BRAKE                     35
-#define SECURITY_OFFSET               25
+#define SECURITY_OFFSET               50
 
 #define BAUD_RATE_SMARTESC            115200
 #define PIN_SERIAL_ESP_TO_CNTRL       27
@@ -378,7 +378,7 @@ void loop(void)
 
 #if DEBUG
 //  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
-//  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
+  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
 #endif
 
   // Send commands
