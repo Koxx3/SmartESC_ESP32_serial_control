@@ -289,6 +289,8 @@ void SendTorque(int16_t brake, int16_t throttle)
   int16_t torque = 0;
   if ((brake > 0) && (speed > 0))
     torque = -brake * BRAKE_TO_TORQUE_FACTOR;
+  else if (brake > 0)
+    torque = 0;
   else
     torque = throttle * THROTTLE_TO_TORQUE_FACTOR;
 
@@ -314,11 +316,7 @@ void SendControlMode(int8_t mode)
   regSet8.Lenght = 2;
   regSet8.Reg = FRAME_REG_CONTROL_MODE;
   regSet8.Value = mode;
-
-  uint16_t sum =
-      regSet8.Frame_start + regSet8.Lenght //
-      + regSet8.Value + regSet8.Reg;
-  regSet8.CRC8 = getCrc((uint8_t *)&regSet16, sizeof(regSet16)); // (sum & 0xff) + ((sum >> 8) & 0xff);
+  regSet8.CRC8 = getCrc((uint8_t *)&regSet16, sizeof(regSet16));
 
   displayBuffer((uint8_t *)&regSet8, sizeof(regSet8));
 
@@ -333,10 +331,6 @@ void SendMode(uint8_t mode)
   regSet8.Lenght = 5;
   regSet8.Reg = FRAME_REG_CONTROL_MODE;
   regSet8.Value = mode;
-
-  uint16_t sum =
-      regSet8.Frame_start + regSet8.Lenght //
-      + regSet8.Value + regSet8.Reg;
   regSet8.CRC8 = getCrc((uint8_t *)&regSet8, sizeof(regSet8));
 
   displayBuffer((uint8_t *)&regSet8, sizeof(regSet8));
@@ -351,10 +345,6 @@ void GetReg(uint8_t reg)
   command.Frame_start = SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET;
   command.Lenght = 1;
   command.Command = reg;
-
-  uint16_t sum =
-      command.Frame_start + command.Lenght //
-      + command.Command;
   command.CRC8 = getCrc((uint8_t *)&command, sizeof(command));
 
   displayBuffer((uint8_t *)&command, sizeof(command));
