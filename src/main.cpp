@@ -31,8 +31,8 @@
 #define FRAME_REG_TORQUE 0x08
 #define FRAME_REG_SPEED_MEESURED 0x1E
 
-#define THROTTLE_TO_TORQUE_FOCTOR 10
-#define THROTTLE_TO_BRAKE_FOCTOR 1
+#define THROTTLE_TO_TORQUE_FACTOR 10
+#define BRAKE_TO_TORQUE_FACTOR 1
 
 #define TIME_SEND 10 // [ms] Sending time interval
 
@@ -287,11 +287,10 @@ void SendSpeed(int16_t brake, int16_t throttle)
 void SendTorque(int16_t brake, int16_t throttle)
 {
   int16_t torque = 0;
-
   if ((brake > 0) && (speed > 0))
-    torque = -brake;
+    torque = -brake * BRAKE_TO_TORQUE_FACTOR;
   else
-    torque = throttle;
+    torque = throttle * THROTTLE_TO_TORQUE_FACTOR;
 
   Serial.printf("torque = %02x\n", torque);
 
@@ -516,7 +515,7 @@ void loop(void)
     // Send commands
     Serial.println("send : SET REG TORQUE");
     //    SendTorque(analogValueBrake, torque);
-    SendTorque(analogValueBrake * THROTTLE_TO_BRAKE_FOCTOR, analogValueThrottle * THROTTLE_TO_TORQUE_FOCTOR);
+    SendTorque(analogValueBrake, analogValueThrottle);
 
 #if RAMP_ENABLED
 #define RAMP 400
