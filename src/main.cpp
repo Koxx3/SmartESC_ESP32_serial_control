@@ -31,7 +31,7 @@
 #define FRAME_REG_TORQUE 0x08
 #define FRAME_REG_SPEED_MEESURED 0x1E
 
-#define THROTTLE_TO_TORQUE_FOCTOR 1.5
+#define THROTTLE_TO_TORQUE_FOCTOR 10
 #define THROTTLE_TO_BRAKE_FOCTOR 1
 
 #define TIME_SEND 10 // [ms] Sending time interval
@@ -66,6 +66,8 @@ uint16_t analogValueThrottleMinCalibRaw = 0;
 int32_t analogValueBrake = 0;
 uint16_t analogValueBrakeRaw = 0;
 uint16_t analogValueBrakeMinCalibRaw = 0;
+
+int32_t speed;
 
 char print_buffer[500];
 
@@ -236,6 +238,20 @@ void displayBuffer(uint8_t *buffer, uint8_t size)
   }
   Serial.printf("\n");
 }
+uint8_t getCrc(uint8_t *buffer, uint8_t size)
+{
+  uint16_t crc = 0;
+  for (int i = 0; i < size - 1; i++)
+  {
+    crc = crc + buffer[i];
+    Serial.printf("crc = %02x\n", crc);
+  }
+
+  uint8_t finalCrc = (uint8_t)(crc & 0xff) + ((crc >> 8) & 0xff);
+  Serial.printf("finalCrc = %02x\n", finalCrc);
+  Serial.printf("\n");
+  return finalCrc;
+}
 
 // ########################## SEND ##########################
 
@@ -245,11 +261,7 @@ void SendCmd(uint8_t cmd)
   command.Frame_start = SERIAL_START_FRAME_DISPLAY_TO_ESC_CMD;
   command.Lenght = 1;
   command.Command = cmd;
-
-  uint16_t sum =
-      command.Frame_start + command.Lenght //
-      + command.Command;
-  command.CRC8 = (sum & 0xff) + ((sum >> 8) & 0xff);
+  command.CRC8 = getCrc((uint8_t *)&command, sizeof(command));
 
   displayBuffer((uint8_t *)&command, sizeof(command));
 
@@ -264,13 +276,7 @@ void SendSpeed(int16_t brake, int16_t throttle)
   regSet32.Lenght = 5;
   regSet32.Reg = FRAME_REG_SPEED;
   regSet32.Value = 0x0010000;
-
-  uint16_t sum = 0;
-  for (int i = 0; i < sizeof(regSet32); i++)
-  {
-    sum += ((uint8_t *)(&regSet32))[i];
-  }
-  regSet32.CRC8 = (sum & 0xff) + ((sum >> 8) & 0xff);
+  regSet32.CRC8 = getCrc((uint8_t *)&regSet32, sizeof(regSet32));
 
   displayBuffer((uint8_t *)&regSet32, sizeof(regSet32));
 
@@ -282,7 +288,7 @@ void SendTorque(int16_t brake, int16_t throttle)
 {
   int16_t torque = 0;
 
-  if (brake > 0)
+  if ((brake > 0) && (speed > 0))
     torque = -brake;
   else
     torque = throttle;
@@ -294,11 +300,7 @@ void SendTorque(int16_t brake, int16_t throttle)
   regSet16.Lenght = 3;
   regSet16.Reg = FRAME_REG_TORQUE;
   regSet16.Value = torque;
-
-  uint16_t sum =
-      regSet16.Frame_start + regSet16.Lenght //
-      + regSet16.Value + regSet16.Reg;
-  regSet16.CRC8 = (sum & 0xff) + ((sum >> 8) & 0xff);
+  regSet16.CRC8 = getCrc((uint8_t *)&regSet16, sizeof(regSet16));
 
   displayBuffer((uint8_t *)&regSet16, sizeof(regSet16));
 
@@ -317,7 +319,7 @@ void SendControlMode(int8_t mode)
   uint16_t sum =
       regSet8.Frame_start + regSet8.Lenght //
       + regSet8.Value + regSet8.Reg;
-  regSet8.CRC8 = (sum & 0xff) + ((sum >> 8) & 0xff);
+  regSet8.CRC8 = getCrc((uint8_t *)&regSet16, sizeof(regSet16)); // (sum & 0xff) + ((sum >> 8) & 0xff);
 
   displayBuffer((uint8_t *)&regSet8, sizeof(regSet8));
 
@@ -336,7 +338,7 @@ void SendMode(uint8_t mode)
   uint16_t sum =
       regSet8.Frame_start + regSet8.Lenght //
       + regSet8.Value + regSet8.Reg;
-  regSet8.CRC8 = (sum & 0xff) + ((sum >> 8) & 0xff);
+  regSet8.CRC8 = getCrc((uint8_t *)&regSet8, sizeof(regSet8));
 
   displayBuffer((uint8_t *)&regSet8, sizeof(regSet8));
 
@@ -354,7 +356,7 @@ void GetReg(uint8_t reg)
   uint16_t sum =
       command.Frame_start + command.Lenght //
       + command.Command;
-  command.CRC8 = (sum & 0xff) + ((sum >> 8) & 0xff);
+  command.CRC8 = getCrc((uint8_t *)&command, sizeof(command));
 
   displayBuffer((uint8_t *)&command, sizeof(command));
 
@@ -366,7 +368,6 @@ void GetReg(uint8_t reg)
 void Receive()
 {
   uint16_t nbBytes = 0;
-  int32_t speed;
 
   // Check for new data availability in the Serial buffer
   while (hwSerCntrl.available())
