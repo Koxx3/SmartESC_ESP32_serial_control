@@ -268,6 +268,8 @@ void GetReg(uint8_t reg)
 void Receive()
 {
   uint16_t nbBytes = 0;
+  int32_t speed;
+
   // Check for new data availability in the Serial buffer
   while (hwSerCntrl.available())
   {
@@ -292,6 +294,12 @@ void Receive()
     else if (nbBytes == 4)
     {
       Serial.printf("=> ko (err : %d)\n", receiveBuffer[2]);
+    }
+    else if (nbBytes == 7)
+    {
+      memcpy(&speed, &(receiveBuffer[2]), 4);
+      Serial.printf("=> ok / speed : %d\n", speed);
+
     }
 
   }
