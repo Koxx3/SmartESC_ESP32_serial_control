@@ -15,6 +15,7 @@
 #define DEBUG 0
 #define DEBUG_SERIAL 0
 #define TEST_DYNAMIC_FLUX 0
+#define PATCHED_ESP32_FWK 1
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -153,30 +154,6 @@ typedef struct
 } __attribute__((packed)) SerialRegSet8;
 #pragma pack(pop)
 SerialRegSet8 regSet8;
-
-#pragma pack(push, 1)
-typedef struct
-{
-
-  uint8_t Frame_start;
-  uint8_t Error;
-  uint8_t CRC8;
-} __attribute__((packed)) SerialFeedbackOk;
-#pragma pack(pop)
-SerialFeedbackOk feedbackOk;
-SerialFeedbackOk newFeedbackOk;
-
-#pragma pack(push, 1)
-typedef struct
-{
-
-  uint8_t Frame_start;
-  uint8_t Lenght;
-  uint8_t Error;
-  uint8_t CRC8;
-} __attribute__((packed)) SerialFeedbackError;
-#pragma pack(pop)
-SerialFeedbackError feedbackError;
 
 typedef enum
 {
@@ -673,7 +650,9 @@ void setup()
   analogValueBrakeMinCalibRaw = analogRead(PIN_IN_ABRAKE);
 
   hwSerCntrl.begin(BAUD_RATE_SMARTESC, SERIAL_8N1, PIN_SERIAL_CNTRL_TO_ESP, PIN_SERIAL_ESP_TO_CNTRL);
+#if PATCHED_ESP32_FWK
   hwSerCntrl.setUartIrqIdleTrigger(1);
+#endif
 }
 
 // ########################## END ##########################
