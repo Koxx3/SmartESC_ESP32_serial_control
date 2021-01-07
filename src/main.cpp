@@ -16,6 +16,7 @@
 #define DEBUG_SERIAL 0
 #define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
+#define LIVE_START 1
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -93,6 +94,7 @@ int16_t torque = 0;
 unsigned long iTimeSend = 0;
 uint8_t state = 0;
 uint32_t iLoop = 0;
+uint32_t startStartTime = 0;
 
 char print_buffer[500];
 
@@ -441,6 +443,33 @@ void Receive()
   }
 }
 
+void readAnalogData()
+{
+
+  // Compute throttle
+  analogValueThrottleRaw = analogRead(PIN_IN_ATHROTTLE);
+  analogValueThrottle = analogValueThrottleRaw - analogValueThrottleMinCalibRaw - SECURITY_OFFSET;
+  analogValueThrottle = analogValueThrottle / 4;
+  if (analogValueThrottle > 255)
+    analogValueThrottle = 255;
+  if (analogValueThrottle < 0)
+    analogValueThrottle = 0;
+
+  // Compute brake
+  analogValueBrakeRaw = analogRead(PIN_IN_ABRAKE);
+  analogValueBrake = analogValueBrakeRaw - analogValueBrakeMinCalibRaw - SECURITY_OFFSET;
+  analogValueBrake = analogValueBrake / 3;
+  if (analogValueBrake > 255)
+    analogValueBrake = 255;
+  if (analogValueBrake < 0)
+    analogValueBrake = 0;
+
+  Serial.println("throttleRaw = " + (String)analogValueThrottleRaw + " / throttleMinCalibRaw = " +                            //
+                 (String)analogValueThrottleMinCalibRaw + " / throttle = " + (String)analogValueThrottle + " / brakeRaw = " + //
+                 (String)analogValueBrakeRaw + " / brakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw +               //
+                 " / brake = " + (String)analogValueBrake + " / torque = " + (String)torque + " / speed = " + (String)speed);
+}
+
 // ########################## LOOP ##########################
 
 void loop(void)
@@ -530,16 +559,15 @@ void loop(void)
     state++;
 
     delay(DELAY_CMD);
+    delay(500);
   }
   else if (state == 5)
   {
 
-    delay(500);
-
     Serial.printf("%d / send : CMD START : ", state);
     SendCmd(SERIAL_FRAME_CMD_START);
 
-    delay(DELAY_CMD);
+    startStartTime = millis();
 
     state++;
 
@@ -559,28 +587,7 @@ void loop(void)
   else if (state == 8)
   {
 
-    // Compute throttle
-    analogValueThrottleRaw = analogRead(PIN_IN_ATHROTTLE);
-    analogValueThrottle = analogValueThrottleRaw - analogValueThrottleMinCalibRaw - SECURITY_OFFSET;
-    analogValueThrottle = analogValueThrottle / 4;
-    if (analogValueThrottle > 255)
-      analogValueThrottle = 255;
-    if (analogValueThrottle < 0)
-      analogValueThrottle = 0;
-
-    // Compute brake
-    analogValueBrakeRaw = analogRead(PIN_IN_ABRAKE);
-    analogValueBrake = analogValueBrakeRaw - analogValueBrakeMinCalibRaw - SECURITY_OFFSET;
-    analogValueBrake = analogValueBrake / 3;
-    if (analogValueBrake > 255)
-      analogValueBrake = 255;
-    if (analogValueBrake < 0)
-      analogValueBrake = 0;
-
-    Serial.println("throttleRaw = " + (String)analogValueThrottleRaw + " / throttleMinCalibRaw = " +                            //
-                   (String)analogValueThrottleMinCalibRaw + " / throttle = " + (String)analogValueThrottle + " / brakeRaw = " + //
-                   (String)analogValueBrakeRaw + " / brakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw +               //
-                   " / brake = " + (String)analogValueBrake + " / torque = " + (String)torque + " / speed = " + (String)speed);
+    readAnalogData();
 
     // Send torque commands
     if ((analogValueBrake > 0) && (speed > 0))
@@ -626,7 +633,39 @@ void loop(void)
 
     Serial.printf("%d / send : GET REG SPEED : ", state);
     GetReg(FRAME_REG_SPEED_MEESURED);
+
+#if LIVE_START
+    if ((speed > 0) || (analogValueThrottle > 0))
+    {
+      state = state - 2;
+    }
+    else
+    {
+      state++;
+
+      delay(500);
+
+      Serial.printf("%d / send : CMD STOP : ", state);
+      SendCmd(SERIAL_FRAME_CMD_STOP);
+
+      delay(500);
+    }
+#else
     state = state - 2;
+#endif
+  }
+  else if (state == 11)
+  {
+
+    Serial.printf("%d / send : GET REG SPEED : ", state);
+    GetReg(FRAME_REG_SPEED_MEESURED);
+
+    readAnalogData();
+
+    if ((speed > 0) || (analogValueThrottle > 0))
+    {
+      state = 5;
+    }
   }
 
   delay(5); // 20 Hz orders
