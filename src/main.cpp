@@ -16,7 +16,8 @@
 #define DEBUG_SERIAL 0
 #define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
-#define LIVE_START 0
+#define START_AND_STOP 0
+#define KICK_START 1
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -62,6 +63,7 @@
 #define BRAKE_TO_TORQUE_FACTOR 2
 #define THROTTLE_MINIMAL_TORQUE 3000
 
+#define MIN_KICK_START_RPM 50
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
 #define FLUX_KP 200   // divided by 1024
@@ -591,11 +593,24 @@ void loop(void)
 
     // Send torque commands
     if ((analogValueBrake > 0) && (speed > 0))
+    {
       torque = -analogValueBrake * BRAKE_TO_TORQUE_FACTOR;
+    }
     else if (analogValueThrottle > 0)
+    {
+#if KICK_START
+      if (speed > MIN_KICK_START_RPM)
+      {
+        torque = THROTTLE_MINIMAL_TORQUE + (analogValueThrottle * THROTTLE_TO_TORQUE_FACTOR);
+      }
+#else
       torque = THROTTLE_MINIMAL_TORQUE + (analogValueThrottle * THROTTLE_TO_TORQUE_FACTOR);
+#endif
+    }
     else
+    {
       torque = 0;
+    }
 
     Serial.printf("%d / send : GET REG STATUS : ", state);
     SetRegS16(FRAME_REG_TORQUE, torque);
@@ -634,7 +649,7 @@ void loop(void)
     Serial.printf("%d / send : GET REG SPEED : ", state);
     GetReg(FRAME_REG_SPEED_MEESURED);
 
-#if LIVE_START
+#if START_AND_STOP
     if ((speed > 0) || (analogValueThrottle > 0))
     {
       state = state - 2;
