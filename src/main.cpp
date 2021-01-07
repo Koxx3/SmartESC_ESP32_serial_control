@@ -16,7 +16,7 @@
 #define DEBUG_SERIAL 0
 #define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
-#define LIVE_START 1
+#define LIVE_START 0
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -60,10 +60,10 @@
 // motor orders
 #define THROTTLE_TO_TORQUE_FACTOR 8 // 128 for max
 #define BRAKE_TO_TORQUE_FACTOR 2
-#define THROTTLE_MINIMAL_TORQUE 1000
+#define THROTTLE_MINIMAL_TORQUE 3000
 
 #define TORQUE_KP 200 // divided by 1024
-#define TORQUE_KI 20  // divided by 16384
+#define TORQUE_KI 50  // divided by 16384
 #define FLUX_KP 200   // divided by 1024
 #define FLUX_KI 200   // divided by 16384
 #define STARUP_FLUX_REFERENCE 300
@@ -394,7 +394,7 @@ void Receive()
       {
         Serial.printf("   ===> value = %02x\n", receiveBuffer[iFrame + 2]);
 
-        if ((receiveBuffer[iFrame] == SERIAL_START_FRAME_ESC_TO_DISPLAY_ERR) && ((receiveBuffer[iFrame] == FAULT_NOW) || (receiveBuffer[iFrame] == FAULT_OVER)) && (state >= 8))
+        if ((receiveBuffer[iFrame] == SERIAL_START_FRAME_ESC_TO_DISPLAY_OK) && ((receiveBuffer[iFrame + 2] == FAULT_NOW) || (receiveBuffer[iFrame + 2] == FAULT_OVER)) && (state >= 8))
         {
           state = 0;
           delay(5000);
