@@ -599,7 +599,7 @@ void loop(void)
     else if (analogValueThrottle > 0)
     {
 #if KICK_START
-      if (speed > MIN_KICK_START_RPM)
+      if (speed >= MIN_KICK_START_RPM)
       {
         torque = THROTTLE_MINIMAL_TORQUE + (analogValueThrottle * THROTTLE_TO_TORQUE_FACTOR);
       }
