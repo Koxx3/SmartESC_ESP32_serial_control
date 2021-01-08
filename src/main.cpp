@@ -14,7 +14,7 @@
 
 #define DEBUG 0
 #define DEBUG_SERIAL 0
-#define TEST_DYNAMIC_FLUX 0
+#define TEST_DYNAMIC_FLUX 1
 #define PATCHED_ESP32_FWK 1
 #define START_AND_STOP 0
 #define KICK_START 1
@@ -61,14 +61,14 @@
 // motor orders
 #define THROTTLE_TO_TORQUE_FACTOR 8 // 128 for max
 #define BRAKE_TO_TORQUE_FACTOR 2
-#define THROTTLE_MINIMAL_TORQUE 3000
+#define THROTTLE_MINIMAL_TORQUE 1000
 
-#define MIN_KICK_START_RPM 50
+#define MIN_KICK_START_RPM 00
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
-#define FLUX_KP 200   // divided by 1024
-#define FLUX_KI 200   // divided by 16384
-#define STARUP_FLUX_REFERENCE 300
+#define FLUX_KP 1800   // divided by 1024 // default 3649
+#define FLUX_KI 1000   // divided by 16384 // default 1995
+#define STARUP_FLUX_REFERENCE 0
 
 #define SECURITY_OFFSET 100
 
