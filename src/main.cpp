@@ -17,7 +17,7 @@
 #define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
 #define START_AND_STOP 0
-#define KICK_START 0
+#define KICK_START 1
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -30,7 +30,7 @@
 #define PIN_IN_ATHROTTLE 39        //Throttle
 
 // delays
-#define TIME_SEND 30         // [ms] Sending time interval
+#define TIME_SEND 15         // [ms] Sending time interval
 #define TIME_SEND_ERROR 5000 // [ms] Sending time interval
 #define DELAY_CMD 10
 
@@ -61,11 +61,11 @@
 #define FRAME_REG_SPEED_MEASURED 0x1E
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 20 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 2
-#define THROTTLE_MINIMAL_TORQUE 0
+#define THROTTLE_TO_TORQUE_FACTOR 50 // 128 for max
+#define BRAKE_TO_TORQUE_FACTOR 20
+#define THROTTLE_MINIMAL_TORQUE 1000
 
-#define MIN_KICK_START_RPM 40 // minimal RPM speed before applying torque -- used only if KICK_START is enabled 
+#define MIN_KICK_START_RPM 60 // minimal RPM speed before applying torque -- used only if KICK_START is enabled 
 #define MIN_BRAKE_RPM 40 // minimal RPM speed for electric brake
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
@@ -820,7 +820,7 @@ void loop(void)
     }
   }
 
-  delay(5); // 20 Hz orders
+  //delay(5); // 20 Hz orders
 
   iLoop++;
 }
