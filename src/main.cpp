@@ -30,7 +30,7 @@
 #define PIN_IN_ATHROTTLE 39        //Throttle
 
 // delays
-#define TIME_SEND 15         // [ms] Sending time interval
+#define TIME_SEND 20         // [ms] Sending time interval
 #define TIME_SEND_ERROR 5000 // [ms] Sending time interval
 #define DELAY_CMD 10
 
@@ -820,7 +820,7 @@ void loop(void)
     }
   }
 
-  //delay(5); // 20 Hz orders
+  delay(5); // 20 Hz orders
 
   iLoop++;
 }
