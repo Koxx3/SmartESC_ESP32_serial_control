@@ -14,7 +14,7 @@
 
 #define DEBUG 0
 #define DEBUG_SERIAL 0
-#define TEST_DYNAMIC_FLUX 1
+#define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
 #define START_AND_STOP 0
 #define KICK_START 1
@@ -30,7 +30,8 @@
 #define PIN_IN_ATHROTTLE 39        //Throttle
 
 // delays
-#define TIME_SEND 50 // [ms] Sending time interval
+#define TIME_SEND 50         // [ms] Sending time interval
+#define TIME_SEND_ERROR 5000 // [ms] Sending time interval
 #define DELAY_CMD 10
 
 // send frame headers
@@ -47,6 +48,7 @@
 
 // registers
 #define FRAME_REG_TARGET_MOTOR 0x00
+#define FRAME_REG_FLAGS 0x01
 #define FRAME_REG_STATUS 0x02
 #define FRAME_REG_CONTROL_MODE 0x03
 #define FRAME_REG_SPEED 0x04
@@ -59,15 +61,15 @@
 #define FRAME_REG_SPEED_MEESURED 0x1E
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 128 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 50
+#define THROTTLE_TO_TORQUE_FACTOR 10 // 128 for max
+#define BRAKE_TO_TORQUE_FACTOR 2
 #define THROTTLE_MINIMAL_TORQUE 0
 
 #define MIN_KICK_START_RPM 100
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
-#define FLUX_KP 1800   // divided by 1024 // default 3649
-#define FLUX_KI 1000   // divided by 16384 // default 1995
+#define FLUX_KP 1800  // divided by 1024 // default 3649
+#define FLUX_KI 1000  // divided by 16384 // default 1995
 #define STARUP_FLUX_REFERENCE 0
 
 #define SECURITY_OFFSET 100
@@ -90,13 +92,17 @@ int32_t analogValueBrake = 0;
 uint16_t analogValueBrakeRaw = 0;
 uint16_t analogValueBrakeMinCalibRaw = 0;
 
+uint32_t lastOrderType;
+uint32_t lastOrderValue;
+
 int32_t speed = 0;
+uint32_t flags = 0;
 int16_t torque = 0;
 
-unsigned long iTimeSend = 0;
-uint8_t state = 0;
+unsigned long timeSend = 0;
+unsigned long timeLastReply;
+int8_t state = 0;
 uint32_t iLoop = 0;
-uint32_t startStartTime = 0;
 
 char print_buffer[500];
 
@@ -158,6 +164,19 @@ typedef struct
 } __attribute__((packed)) SerialRegSet8;
 #pragma pack(pop)
 SerialRegSet8 regSet8;
+
+/** @name Fault source error codes */
+/** @{ */
+#define MC_NO_ERROR (uint16_t)(0x0000u)     /**< @brief No error.*/
+#define MC_NO_FAULTS (uint16_t)(0x0000u)    /**< @brief No error.*/
+#define MC_FOC_DURATION (uint16_t)(0x0001u) /**< @brief Error: FOC rate to high.*/
+#define MC_OVER_VOLT (uint16_t)(0x0002u)    /**< @brief Error: Software over voltage.*/
+#define MC_UNDER_VOLT (uint16_t)(0x0004u)   /**< @brief Error: Software under voltage.*/
+#define MC_OVER_TEMP (uint16_t)(0x0008u)    /**< @brief Error: Software over temperature.*/
+#define MC_START_UP (uint16_t)(0x0010u)     /**< @brief Error: Startup failed.*/
+#define MC_SPEED_FDBK (uint16_t)(0x0020u)   /**< @brief Error: Speed feedback.*/
+#define MC_BREAK_IN (uint16_t)(0x0040u)     /**< @brief Error: Emergency input (Over current).*/
+#define MC_SW_ERROR (uint16_t)(0x0080u)     /**< @brief Software Error.*/
 
 typedef enum
 {
@@ -284,21 +303,10 @@ void SendCmd(uint8_t cmd)
 
   // Write to Serial
   hwSerCntrl.write((uint8_t *)&command, sizeof(command));
-}
 
-void SendMode(uint8_t mode)
-{
-  // Create command
-  regSet8.Frame_start = SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_SET;
-  regSet8.Lenght = 5;
-  regSet8.Reg = FRAME_REG_CONTROL_MODE;
-  regSet8.Value = mode;
-  regSet8.CRC8 = getCrc((uint8_t *)&regSet8, sizeof(regSet8));
-
-  displayBuffer((uint8_t *)&regSet8, sizeof(regSet8));
-
-  // Write to Serial
-  hwSerCntrl.write((uint8_t *)&regSet8, sizeof(regSet8));
+  // store last command
+  lastOrderType = SERIAL_START_FRAME_DISPLAY_TO_ESC_CMD;
+  lastOrderValue = cmd;
 }
 
 void GetReg(uint8_t reg)
@@ -313,6 +321,9 @@ void GetReg(uint8_t reg)
 
   // Write to Serial
   hwSerCntrl.write((uint8_t *)&command, sizeof(command));
+  // store last command
+  lastOrderType = SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET;
+  lastOrderValue = reg;
 }
 
 void SetRegU16(uint8_t reg, uint16_t val)
@@ -328,6 +339,10 @@ void SetRegU16(uint8_t reg, uint16_t val)
 
   // Write to Serial
   hwSerCntrl.write((uint8_t *)&regSetU16, sizeof(regSetU16));
+
+  // store last command
+  lastOrderType = SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_SET;
+  lastOrderValue = reg;
 }
 
 void SetRegS16(uint8_t reg, int16_t val)
@@ -343,6 +358,10 @@ void SetRegS16(uint8_t reg, int16_t val)
 
   // Write to Serial
   hwSerCntrl.write((uint8_t *)&regSetS16, sizeof(regSetS16));
+
+  // store last command
+  lastOrderType = SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_SET;
+  lastOrderValue = reg;
 }
 
 // ########################## RECEIVE ##########################
@@ -360,6 +379,9 @@ void Receive()
   }
   if (nbBytes > 0)
   {
+
+    timeLastReply = millis();
+
 #if DEBUG_SERIAL
     // display frame
     Serial.print("   received : ");
@@ -396,10 +418,13 @@ void Receive()
       {
         Serial.printf("   ===> value = %02x\n", receiveBuffer[iFrame + 2]);
 
-        if ((receiveBuffer[iFrame] == SERIAL_START_FRAME_ESC_TO_DISPLAY_OK) && ((receiveBuffer[iFrame + 2] == FAULT_NOW) || (receiveBuffer[iFrame + 2] == FAULT_OVER)) && (state >= 8))
+        if (lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET)
         {
-          state = 0;
-          delay(5000);
+          if ((receiveBuffer[iFrame] == SERIAL_START_FRAME_ESC_TO_DISPLAY_OK) && ((receiveBuffer[iFrame + 2] == FAULT_NOW) || (receiveBuffer[iFrame + 2] == FAULT_OVER)) && (state >= 8))
+          {
+            state = -1;
+            Serial.printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+          }
         }
       }
       else if (msgSize == 2)
@@ -408,8 +433,71 @@ void Receive()
       }
       else if (msgSize == 4)
       {
-        memcpy(&speed, &(receiveBuffer[iFrame + 2]), 4);
-        Serial.printf("   ===> speed : %d\n", speed);
+        if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_SPEED))
+        {
+          memcpy(&speed, &(receiveBuffer[iFrame + 2]), 4);
+          Serial.printf("   ===> speed : %d\n", speed);
+        }
+        if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_FLAGS))
+        {
+          memcpy(&flags, &(receiveBuffer[iFrame + 2]), 4);
+          Serial.printf("   ===> flags : %08x\n", flags);
+
+          if (flags >> 16 == 0)
+            flags = flags & 0xffff;
+          else
+            flags = flags >> 16;
+
+          if (flags != 0)
+          {
+            Serial.printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! FLASG ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+
+            if (flags == MC_NO_ERROR)
+            {
+              Serial.printf("   ===> flags : MC_NO_ERROR\n");
+            }
+            else if (flags == MC_NO_FAULTS)
+            {
+              Serial.printf("   ===> flags : MC_NO_FAULTS\n");
+            }
+            else if (flags == MC_FOC_DURATION)
+            {
+              Serial.printf("   ===> flags : MC_FOC_DURATION\n");
+            }
+            else if (flags == MC_OVER_VOLT)
+            {
+              Serial.printf("   ===> flags : MC_OVER_VOLT\n");
+            }
+            else if (flags == MC_UNDER_VOLT)
+            {
+              Serial.printf("   ===> flags : MC_UNDER_VOLT\n");
+            }
+            else if (flags == MC_OVER_TEMP)
+            {
+              Serial.printf("   ===> flags : MC_OVER_TEMP\n");
+            }
+            else if (flags == MC_START_UP)
+            {
+              Serial.printf("   ===> flags : MC_START_UP\n");
+            }
+            else if (flags == MC_SPEED_FDBK)
+            {
+              Serial.printf("   ===> flags : MC_SPEED_FDBK\n");
+            }
+            else if (flags == MC_BREAK_IN)
+            {
+              Serial.printf("   ===> flags : MC_BREAK_IN\n");
+            }
+            else if (flags == MC_SW_ERROR)
+            {
+              Serial.printf("   ===> flags : MC_SW_ERROR\n");
+            }
+            else
+            {
+              Serial.printf("   ===> flags : unkown\n");
+            }
+          }
+        }
       }
       else
       {
@@ -482,18 +570,27 @@ void loop(void)
   Receive();
 
   // Avoid delay
-  if (iTimeSend > timeNow)
+  if (timeSend > timeNow)
     return;
-  iTimeSend = timeNow + TIME_SEND;
+  timeSend = timeNow + TIME_SEND;
 
-  if (state == 0)
+  // no reply received for a long time... restart at state 0
+  if (timeLastReply > timeNow + TIME_SEND_ERROR)
+    state = 0;
+
+  if (state == -1)
+  {
+    timeSend = timeNow + TIME_SEND_ERROR;
+    state++;
+  }
+  else if (state == 0)
   {
 
     analogValueThrottleRaw = 0;
     analogValueBrakeRaw = 0;
     torque = 0;
 
-    Serial.printf("%d / send : GET REG STATUS : ", state);
+    Serial.printf("%d / send : GET REG FRAME_REG_STATUS : ", state);
     GetReg(FRAME_REG_STATUS);
     state++;
   }
@@ -508,17 +605,31 @@ void loop(void)
 
   else if (state == 2)
   {
-    Serial.printf("%d / send : GET REG STATUS : ", state);
+    Serial.printf("%d / send : GET REG FRAME_REG_FLAGS : ", state);
+    GetReg(FRAME_REG_FLAGS);
+    state++;
+  }
+
+  else if (state == 3)
+  {
+    Serial.printf("%d / send : GET REG FRAME_REG_STATUS : ", state);
     GetReg(FRAME_REG_STATUS);
     state++;
   }
-  else if (state == 3)
+  else if (state == 4)
   {
-
     Serial.printf("%d / send : CMD FAULT_ACK : ", state);
     SendCmd(SERIAL_FRAME_CMD_FAULT_ACK);
+    state++;
+  }
 
-    delay(5);
+  else if (state == 5)
+  {
+
+    Serial.printf("%d / send : SET REG FRAME_REG_TORQUE : ", state);
+    SetRegS16(FRAME_REG_TORQUE, torque);
+
+    delay(10);
 
     Serial.printf("%d / send : SET REG CONTROL_MODE : ", state);
     SetRegU16(FRAME_REG_CONTROL_MODE, 0x00);
@@ -560,39 +671,38 @@ void loop(void)
     delay(DELAY_CMD);
   }
 
-  else if (state == 4)
+  else if (state == 6)
   {
-    Serial.printf("%d / send : GET REG STATUS : ", state);
-    GetReg(FRAME_REG_STATUS);
+    Serial.printf("%d / send : GET REG FRAME_REG_FLAGS : ", state);
+    GetReg(FRAME_REG_FLAGS);
     state++;
 
-    delay(DELAY_CMD);
     delay(500);
   }
-  else if (state == 5)
+  else if (state == 7)
   {
 
     Serial.printf("%d / send : CMD START : ", state);
     SendCmd(SERIAL_FRAME_CMD_START);
 
-    startStartTime = millis();
-
     state++;
 
     delay(DELAY_CMD);
   }
-  else if (state == 6)
+  else if (state == 8)
   {
-    Serial.printf("%d / send : GET REG STATUS : ", state);
+
+    Serial.printf("%d / send : GET REG FRAME_REG_FLAGS : ", state);
+    GetReg(FRAME_REG_FLAGS);
+    state++;
+  }
+  else if (state == 9)
+  {
+    Serial.printf("%d / send : GET REG FRAME_REG_STATUS : ", state);
     GetReg(FRAME_REG_STATUS);
     state++;
   }
-  else if (state == 7)
-  {
-
-    state++;
-  }
-  else if (state == 8)
+  else if (state == 10)
   {
 
     readAnalogData();
@@ -618,7 +728,7 @@ void loop(void)
       torque = 0;
     }
 
-    Serial.printf("%d / send : GET REG STATUS : ", state);
+    Serial.printf("%d / send : SET REG FRAME_REG_TORQUE : ", state);
     SetRegS16(FRAME_REG_TORQUE, torque);
 
 #if RAMP_ENABLED
@@ -631,13 +741,24 @@ void loop(void)
 
     state++;
   }
-  else if (state == 9)
+  else if (state == 11)
   {
 
-    Serial.printf("%d / send : GET REG STATUS : ", state);
+    Serial.printf("%d / send : GET REG FRAME_REG_FLAGS : ", state);
+    GetReg(FRAME_REG_FLAGS);
+    state++;
+  }
+
+  else if (state == 12)
+  {
+    Serial.printf("%d / send : GET REG FRAME_REG_STATUS : ", state);
     GetReg(FRAME_REG_STATUS);
 
-    delay(10);
+    state++;
+  }
+
+  else if (state == 13)
+  {
 
 #if TEST_DYNAMIC_FLUX
     if (speed > 100)
@@ -649,12 +770,16 @@ void loop(void)
 
     state++;
   }
-  else if (state == 10)
+  else if (state == 14)
   {
 
     Serial.printf("%d / send : GET REG SPEED : ", state);
     GetReg(FRAME_REG_SPEED_MEESURED);
+    state++;
+  }
 
+  else if (state == 15)
+  {
 #if START_AND_STOP
     if ((speed > 0) || (analogValueThrottle > 0))
     {
@@ -672,10 +797,10 @@ void loop(void)
       delay(500);
     }
 #else
-    state = state - 2;
+    state = state - 7;
 #endif
   }
-  else if (state == 11)
+  else if (state == 16)
   {
 
     Serial.printf("%d / send : GET REG SPEED : ", state);
