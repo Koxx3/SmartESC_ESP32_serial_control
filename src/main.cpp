@@ -17,7 +17,7 @@
 #define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
 #define START_AND_STOP 0
-#define KICK_START 1
+#define KICK_START 0
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -30,7 +30,7 @@
 #define PIN_IN_ATHROTTLE 39        //Throttle
 
 // delays
-#define TIME_SEND 20         // [ms] Sending time interval
+#define TIME_SEND 30         // [ms] Sending time interval
 #define TIME_SEND_ERROR 5000 // [ms] Sending time interval
 #define DELAY_CMD 10
 
@@ -61,9 +61,9 @@
 #define FRAME_REG_SPEED_MEASURED 0x1E
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 80 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 50
-#define THROTTLE_MINIMAL_TORQUE 1000
+#define THROTTLE_TO_TORQUE_FACTOR 20 // 128 for max
+#define BRAKE_TO_TORQUE_FACTOR 2
+#define THROTTLE_MINIMAL_TORQUE 0
 
 #define MIN_KICK_START_RPM 40 // minimal RPM speed before applying torque -- used only if KICK_START is enabled 
 #define MIN_BRAKE_RPM 40 // minimal RPM speed for electric brake
@@ -434,21 +434,26 @@ void Receive()
       }
       else if (msgSize == 4)
       {
+
+        //        Serial.printf("   ===> lastOrderType = %d / lastOrderValue : %d\n", lastOrderType, lastOrderValue);
+
         if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_SPEED_MEASURED))
         {
           memcpy(&speed, &(receiveBuffer[iFrame + 2]), 4);
           Serial.printf("   ===> speed : %d\n", speed);
         }
-        if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_FLAGS))
+        else if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_FLAGS))
         {
           memcpy(&flags, &(receiveBuffer[iFrame + 2]), 4);
           Serial.printf("   ===> flags : %08x\n", flags);
 
+          // try current and last faults
           if (flags >> 16 == 0)
             flags = flags & 0xffff;
           else
             flags = flags >> 16;
 
+          // decode faults
           if (flags != 0)
           {
             Serial.printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! FLASG ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
@@ -533,6 +538,8 @@ void Receive()
     Serial.println();
   }
 }
+
+// ########################## THROTTLE / BRAKE ##########################
 
 void readAnalogData()
 {
@@ -626,11 +633,6 @@ void loop(void)
 
   else if (state == 5)
   {
-
-    Serial.printf("%d / send : SET REG FRAME_REG_TORQUE : ", state);
-    SetRegS16(FRAME_REG_TORQUE, torque);
-
-    delay(10);
 
     Serial.printf("%d / send : SET REG CONTROL_MODE : ", state);
     SetRegU16(FRAME_REG_CONTROL_MODE, 0x00);
