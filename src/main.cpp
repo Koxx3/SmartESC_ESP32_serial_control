@@ -59,11 +59,11 @@
 #define FRAME_REG_SPEED_MEESURED 0x1E
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 10 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 2
-#define THROTTLE_MINIMAL_TORQUE 2000
+#define THROTTLE_TO_TORQUE_FACTOR 128 // 128 for max
+#define BRAKE_TO_TORQUE_FACTOR 50
+#define THROTTLE_MINIMAL_TORQUE 0
 
-#define MIN_KICK_START_RPM 00
+#define MIN_KICK_START_RPM 100
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
 #define FLUX_KP 1800   // divided by 1024 // default 3649
@@ -491,6 +491,7 @@ void loop(void)
 
     analogValueThrottleRaw = 0;
     analogValueBrakeRaw = 0;
+    torque = 0;
 
     Serial.printf("%d / send : GET REG STATUS : ", state);
     GetReg(FRAME_REG_STATUS);
@@ -521,6 +522,11 @@ void loop(void)
 
     Serial.printf("%d / send : SET REG CONTROL_MODE : ", state);
     SetRegU16(FRAME_REG_CONTROL_MODE, 0x00);
+
+    delay(10);
+
+    Serial.printf("%d / send : SET REG FRAME_REG_TORQUE : ", state);
+    SetRegS16(FRAME_REG_TORQUE, torque);
 
     delay(10);
 
