@@ -30,7 +30,7 @@
 #define PIN_IN_ATHROTTLE 39        //Throttle
 
 // delays
-#define TIME_SEND 50         // [ms] Sending time interval
+#define TIME_SEND 20         // [ms] Sending time interval
 #define TIME_SEND_ERROR 5000 // [ms] Sending time interval
 #define DELAY_CMD 10
 
@@ -58,14 +58,15 @@
 #define FRAME_REG_FLUX_REF 0x0C
 #define FRAME_REG_FLUX_KI 0x0D
 #define FRAME_REG_FLUX_KP 0x0E
-#define FRAME_REG_SPEED_MEESURED 0x1E
+#define FRAME_REG_SPEED_MEASURED 0x1E
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 10 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 2
-#define THROTTLE_MINIMAL_TORQUE 0
+#define THROTTLE_TO_TORQUE_FACTOR 80 // 128 for max
+#define BRAKE_TO_TORQUE_FACTOR 50
+#define THROTTLE_MINIMAL_TORQUE 1000
 
-#define MIN_KICK_START_RPM 100
+#define MIN_KICK_START_RPM 40 // minimal RPM speed before applying torque -- used only if KICK_START is enabled 
+#define MIN_BRAKE_RPM 40 // minimal RPM speed for electric brake
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
 #define FLUX_KP 1800  // divided by 1024 // default 3649
@@ -433,7 +434,7 @@ void Receive()
       }
       else if (msgSize == 4)
       {
-        if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_SPEED))
+        if ((lastOrderType == SERIAL_START_FRAME_DISPLAY_TO_ESC_REG_GET) && (lastOrderValue == FRAME_REG_SPEED_MEASURED))
         {
           memcpy(&speed, &(receiveBuffer[iFrame + 2]), 4);
           Serial.printf("   ===> speed : %d\n", speed);
@@ -636,11 +637,6 @@ void loop(void)
 
     delay(10);
 
-    Serial.printf("%d / send : SET REG FRAME_REG_TORQUE : ", state);
-    SetRegS16(FRAME_REG_TORQUE, torque);
-
-    delay(10);
-
     Serial.printf("%d / send : REG_TORQUE_KI : ", state);
     SetRegU16(FRAME_REG_TORQUE_KI, TORQUE_KI);
 
@@ -708,9 +704,16 @@ void loop(void)
     readAnalogData();
 
     // Send torque commands
-    if ((analogValueBrake > 0) && (speed > 0))
+    if (analogValueBrake > 0)
     {
-      torque = -analogValueBrake * BRAKE_TO_TORQUE_FACTOR;
+      if (speed > MIN_BRAKE_RPM)
+      {
+        torque = -analogValueBrake * BRAKE_TO_TORQUE_FACTOR;
+      }
+      else
+      {
+        torque = 0;
+      }
     }
     else if (analogValueThrottle > 0)
     {
@@ -728,6 +731,7 @@ void loop(void)
       torque = 0;
     }
 
+    Serial.printf("%d / torque : %d\n", state, torque);
     Serial.printf("%d / send : SET REG FRAME_REG_TORQUE : ", state);
     SetRegS16(FRAME_REG_TORQUE, torque);
 
@@ -774,7 +778,7 @@ void loop(void)
   {
 
     Serial.printf("%d / send : GET REG SPEED : ", state);
-    GetReg(FRAME_REG_SPEED_MEESURED);
+    GetReg(FRAME_REG_SPEED_MEASURED);
     state++;
   }
 
@@ -804,7 +808,7 @@ void loop(void)
   {
 
     Serial.printf("%d / send : GET REG SPEED : ", state);
-    GetReg(FRAME_REG_SPEED_MEESURED);
+    GetReg(FRAME_REG_SPEED_MEASURED);
 
     readAnalogData();
 
