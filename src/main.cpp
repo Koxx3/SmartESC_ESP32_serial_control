@@ -31,7 +31,7 @@
 
 // delays
 #define TIME_SEND 20         // [ms] Sending time interval
-#define TIME_SEND_ERROR 5000 // [ms] Sending time interval
+#define TIME_SEND_ERROR 1000 // [ms] Sending time interval
 #define DELAY_CMD 10
 
 // send frame headers
@@ -61,12 +61,12 @@
 #define FRAME_REG_SPEED_MEASURED 0x1E
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 50 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 20
-#define THROTTLE_MINIMAL_TORQUE 1000
+#define THROTTLE_TO_TORQUE_FACTOR 90 // 128 for max
+#define BRAKE_TO_TORQUE_FACTOR 80
+#define THROTTLE_MINIMAL_TORQUE 0
 
-#define MIN_KICK_START_RPM 60 // minimal RPM speed before applying torque -- used only if KICK_START is enabled 
-#define MIN_BRAKE_RPM 40 // minimal RPM speed for electric brake
+#define MIN_KICK_START_RPM 30 // minimal RPM speed before applying torque -- used only if KICK_START is enabled 
+#define MIN_BRAKE_RPM 30 // minimal RPM speed for electric brake
 #define TORQUE_KP 200 // divided by 1024
 #define TORQUE_KI 50  // divided by 16384
 #define FLUX_KP 1800  // divided by 1024 // default 3649
