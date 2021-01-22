@@ -18,7 +18,7 @@
 #define TEST_DYNAMIC_FLUX 0
 #define PATCHED_ESP32_FWK 1
 #define START_AND_STOP 0
-#define KICK_START 1
+#define KICK_START 0
 
 // serial
 #define SERIAL_BAUD 921600        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
@@ -60,11 +60,12 @@
 #define FRAME_REG_FLUX_KI 0x0D
 #define FRAME_REG_FLUX_KP 0x0E
 #define FRAME_REG_SPEED_MEASURED 0x1E
+#define FRAME_REG_RAMP_FINAL_SPEED 91
 
 // motor orders
-#define THROTTLE_TO_TORQUE_FACTOR 50 // 128 for max
-#define BRAKE_TO_TORQUE_FACTOR 20
-#define THROTTLE_MINIMAL_TORQUE 1000
+#define THROTTLE_TO_TORQUE_FACTOR 50 // 128 for max -- positive torque on throttle
+#define BRAKE_TO_TORQUE_FACTOR 20  // 128 for max -- negative torque on brake
+#define THROTTLE_MINIMAL_TORQUE 1000 // appying this minimal torque when throttle is engaged
 
 #define MIN_KICK_START_RPM 60 // minimal RPM speed before applying torque -- used only if KICK_START is enabled
 #define MIN_BRAKE_RPM 40      // minimal RPM speed for electric brake
@@ -74,7 +75,7 @@
 #define FLUX_KI 1000          // divided by 16384 // default 1995
 #define STARUP_FLUX_REFERENCE 0
 
-#define SECURITY_OFFSET 100
+#define SECURITY_OFFSET 100 // throttle and brake threshold
 
 // Global variables
 uint8_t idx = 0;       // Index for new data pointer
