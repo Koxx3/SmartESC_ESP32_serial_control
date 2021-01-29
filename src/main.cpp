@@ -26,7 +26,7 @@
 #include <Arduino.h>
 
 // ########################## DEFINES ##########################
-#define HOVER_SERIAL_BAUD 115200               // [-] Baud rate for Serial (used to communicate with the hoverboard)
+#define HOVER_SERIAL_BAUD 57600               // [-] Baud rate for Serial (used to communicate with the hoverboard)
 #define SERIAL_BAUD 921600                     // [-] Baud rate for built-in Serial (used for the Serial Monitor)
 #define SERIAL_START_FRAME_ESC_TO_DISPLAY 0x5A // [-] Start frame definition for serial commands
 #define SERIAL_START_FRAME_DISPLAY_TO_ESC 0xA5 // [-] Start frame definition for serial commands
@@ -35,11 +35,11 @@
 // #define DEBUG_RX                        // [-] Debug received data. Prints all bytes to serial (comment-out to disable)
 
 #define DEBUG                         1
-#define PIN_THROTTLE                  34
-#define PIN_BRAKE                     35
+#define PIN_IN_ABRAKE 34           //Brake
+#define PIN_IN_ATHROTTLE 39        //Throttle
 #define SECURITY_OFFSET               50
 
-#define BAUD_RATE_SMARTESC            115200
+#define BAUD_RATE_SMARTESC            57600
 #define PIN_SERIAL_ESP_TO_CNTRL       27
 #define PIN_SERIAL_CNTRL_TO_ESP       14
 
@@ -89,6 +89,24 @@ typedef struct
   uint8_t CRC8;
 } SerialCommand;
 SerialCommand command;
+
+typedef struct
+{
+  //           
+  uint8_t a = 0x00; // 00
+  uint8_t b = 0x00; // 00
+  uint8_t c = 0x00; // 00
+  uint8_t d = 0x10; // 10
+  uint8_t e = 0x00; // 00
+  uint8_t f = 0x00; // 00
+  uint8_t g = 0x00; // 00
+  uint8_t h = 0xff; // FF
+  uint8_t i = 0x00; // 00
+  uint8_t j = 0x00; // 00
+  uint8_t k = 0x00; // 00
+  uint8_t l = 0x00; // 00
+} SerialCommand2;
+SerialCommand2 command2;
 
 typedef struct
 {
@@ -165,14 +183,14 @@ void setup()
   Serial.begin(SERIAL_BAUD);
   Serial.println("SmartESC Serial v1.0");
 
-  pinMode(PIN_THROTTLE, INPUT);
-  pinMode(PIN_BRAKE, INPUT);
+  pinMode(PIN_IN_ATHROTTLE, INPUT);
+  pinMode(PIN_IN_ABRAKE, INPUT);
 
   // do it twice to improve values
-  analogValueThrottleMinCalibRaw = analogRead(PIN_THROTTLE);
-  analogValueBrakeMinCalibRaw = analogRead(PIN_BRAKE);
-  analogValueThrottleMinCalibRaw = analogRead(PIN_THROTTLE);
-  analogValueBrakeMinCalibRaw = analogRead(PIN_BRAKE);
+  analogValueThrottleMinCalibRaw = analogRead(PIN_IN_ATHROTTLE);
+  analogValueBrakeMinCalibRaw = analogRead(PIN_IN_ABRAKE);
+  analogValueThrottleMinCalibRaw = analogRead(PIN_IN_ATHROTTLE);
+  analogValueBrakeMinCalibRaw = analogRead(PIN_IN_ABRAKE);
 
   hwSerCntrl.begin(BAUD_RATE_SMARTESC, SERIAL_8N1, PIN_SERIAL_CNTRL_TO_ESP, PIN_SERIAL_ESP_TO_CNTRL);
 }
@@ -180,6 +198,7 @@ void setup()
 // ########################## SEND ##########################
 void Send(int16_t brake, int16_t throttle)
 {
+  /*
   // Create command
   command.Frame_start = (uint16_t)SERIAL_START_FRAME_DISPLAY_TO_ESC;
   command.Brake = (int16_t)brake;
@@ -208,9 +227,18 @@ void Send(int16_t brake, int16_t throttle)
       ^ command.Speed_limit_             //
       ^ command.Motor_start_speed        //
   );
+*/
+
+//00 00 00 10 00 00 00 FF 00 00 00 00
+
+throttle=throttle *2;
+command2.h = (throttle & 0xff); 
+command2.i = (throttle >> 8) & 0xff; 
+
+Serial.printf("command2.h = %02x / command2.i = %02x\n", command2.h, command2.i);
 
   // Write to Serial
-  hwSerCntrl.write((uint8_t *)&command, sizeof(command));
+  hwSerCntrl.write((uint8_t *)&command2, sizeof(command2));
 }
 
 // ########################## RECEIVE ##########################
@@ -359,7 +387,7 @@ void loop(void)
   iTimeSend = timeNow + TIME_SEND;
 
   // Compute throttle
-  analogValueThrottleRaw = analogRead(PIN_THROTTLE);
+  analogValueThrottleRaw = analogRead(PIN_IN_ATHROTTLE);
   analogValueThrottle = analogValueThrottleRaw - analogValueThrottleMinCalibRaw - SECURITY_OFFSET;
   analogValueThrottle = analogValueThrottle / 4;
   if (analogValueThrottle > 255)
@@ -368,7 +396,7 @@ void loop(void)
     analogValueThrottle = 0;
 
   // Compute brake
-  analogValueBrakeRaw = analogRead(PIN_BRAKE);
+  analogValueBrakeRaw = analogRead(PIN_IN_ABRAKE);
   analogValueBrake = analogValueBrakeRaw - analogValueBrakeMinCalibRaw - SECURITY_OFFSET;
   analogValueBrake = analogValueBrake / 4;
   if (analogValueBrake > 255)
@@ -377,8 +405,8 @@ void loop(void)
     analogValueBrake = 0;
 
 #if DEBUG
-//  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
-  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
+  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
+//  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
 #endif
 
   // Send commands
