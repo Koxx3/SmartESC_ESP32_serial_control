@@ -6,4 +6,8 @@
 
 # Serial debug & flash
 - use USB debug
-- speed : 921600
+- speed : 57600
+
+# Commands with CR-LF
+- autodetect
+- help

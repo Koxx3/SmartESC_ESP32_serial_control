@@ -423,6 +423,9 @@ void Process_USB_command(String command)
       hwSerCntrl.write((uint8_t *)&tx_buffer, sizeof(tx_buffer));
       Serial.print("command executed!\r\n");
     }
+    else if (command == "help"){
+    Serial.print("Implemented commands:\r\n\autodetect : find motorspecific hall/phase configuration\r\n");
+    }
     else Serial.print("unknown command\r\n");
 
 
