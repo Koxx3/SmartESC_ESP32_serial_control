@@ -27,10 +27,10 @@
 
 // ########################## DEFINES ##########################
 #define HOVER_SERIAL_BAUD 57600               // [-] Baud rate for Serial (used to communicate with the hoverboard)
-#define SERIAL_BAUD 921600                     // [-] Baud rate for built-in Serial (used for the Serial Monitor)
+#define SERIAL_BAUD 57600                     // [-] Baud rate for built-in Serial (used for the Serial Monitor)
 #define SERIAL_START_FRAME_ESC_TO_DISPLAY 0x5A // [-] Start frame definition for serial commands
 #define SERIAL_START_FRAME_DISPLAY_TO_ESC 0xA5 // [-] Start frame definition for serial commands
-#define TIME_SEND 10                           // [ms] Sending time interval
+#define TIME_SEND 100                           // [ms] Sending time interval
 
 // #define DEBUG_RX                        // [-] Debug received data. Prints all bytes to serial (comment-out to disable)
 
@@ -45,10 +45,14 @@
 
 // Global variables
 uint8_t idx = 0;       // Index for new data pointer
+uint8_t tx_buffer[12] = {0xAA, 0x00, 0x00,0x06,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00}; 
+char USB_rx_buffer[64];
+uint8_t USB_rx_buffer_pointer;
 uint8_t bufStartFrame; // Buffer Start Frame
 byte *p;               // Pointer declaration for the new received data
 byte incomingByte;
 byte incomingBytePrev;
+String USB_command;
 
 // Trottle
 int32_t analogValueThrottle = 0;
@@ -93,10 +97,10 @@ SerialCommand command;
 typedef struct
 {
   //           
-  uint8_t a = 0x00; // 00
+  uint8_t a = 0xAA; // 00
   uint8_t b = 0x00; // 00
   uint8_t c = 0x00; // 00
-  uint8_t d = 0x10; // 10
+  uint8_t d = 0x06; // 10
   uint8_t e = 0x00; // 00
   uint8_t f = 0x00; // 00
   uint8_t g = 0x00; // 00
@@ -175,6 +179,7 @@ SerialFeedback feedback;
 SerialFeedback newFeedback;
 
 HardwareSerial hwSerCntrl(1);
+void Process_USB_command(String command);
 
 
 // ########################## SETUP ##########################
@@ -232,13 +237,19 @@ void Send(int16_t brake, int16_t throttle)
 //00 00 00 10 00 00 00 FF 00 00 00 00
 
 throttle=throttle *2;
-command2.h = (throttle & 0xff); 
-command2.i = (throttle >> 8) & 0xff; 
+tx_buffer[7] = (throttle & 0xff); 
+tx_buffer[8] = (throttle >> 8) & 0xff; 
+tx_buffer[4] = 0; 
+uint8_t chkSum = 0;
 
-Serial.printf("command2.h = %02x / command2.i = %02x\n", command2.h, command2.i);
+for (uint8_t i = 0; i < 11; i++) {
+			chkSum ^= tx_buffer[i];
+}
+tx_buffer[11] = chkSum;
+//Serial.printf("command2.h = %02x / command2.i = %02x\n", command2.h, command2.i);
 
   // Write to Serial
-  hwSerCntrl.write((uint8_t *)&command2, sizeof(command2));
+  hwSerCntrl.write((uint8_t *)&tx_buffer, sizeof(tx_buffer));
 }
 
 // ########################## RECEIVE ##########################
@@ -254,6 +265,8 @@ void Receive()
   {
     return;
   }
+
+  
 
 // If DEBUG_RX is defined print all incoming bytes
 #ifdef DEBUG_RX
@@ -370,6 +383,51 @@ void Receive()
   incomingBytePrev = incomingByte;
 }
 
+void Receive_USB()
+{
+  // Check for new data availability in the Serial buffer
+  if (Serial.available())
+  {
+    USB_rx_buffer[USB_rx_buffer_pointer] = Serial.read(); // Read the incoming byte
+    if(USB_rx_buffer[USB_rx_buffer_pointer]==0x0A && USB_rx_buffer[USB_rx_buffer_pointer-1]==0x0D){
+    USB_command ="";
+    for(int i = 0;i<USB_rx_buffer_pointer-1;i++)  USB_command+=(char)USB_rx_buffer[i];
+    USB_rx_buffer_pointer=0;    
+    Serial.print("received command:" + USB_command +"\r\n");
+    Process_USB_command(USB_command);
+    
+    }
+    else USB_rx_buffer_pointer++;    
+
+  }
+  else
+  {
+    return;
+  }
+}
+
+void Process_USB_command(String command)
+{
+  
+    if (command == "autodetect"){
+      tx_buffer[7] = 0; 
+      tx_buffer[8] = 0; 
+      tx_buffer[4] = 1; 
+      uint8_t chkSum = 0;
+
+      for (uint8_t i = 0; i < 11; i++) {
+			  chkSum ^= tx_buffer[i];
+      }
+      tx_buffer[11] = chkSum;
+      // Write to Serial
+      hwSerCntrl.write((uint8_t *)&tx_buffer, sizeof(tx_buffer));
+      Serial.print("command executed!\r\n");
+    }
+    else Serial.print("unknown command\r\n");
+
+
+}
+
 // ########################## LOOP ##########################
 
 unsigned long iTimeSend = 0;
@@ -380,6 +438,7 @@ void loop(void)
 
   // Check for new received data
   Receive();
+  Receive_USB();
 
   // Avoid delay
   if (iTimeSend > timeNow)
@@ -405,7 +464,7 @@ void loop(void)
     analogValueBrake = 0;
 
 #if DEBUG
-  Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
+ // Serial.println("analogValueThrottleRaw = " + (String)analogValueThrottleRaw + " / analogValueThrottleMinCalibRaw = " + (String)analogValueThrottleMinCalibRaw+ " / analogValueThrottle = " + (String)analogValueThrottle);
 //  Serial.println("analogValueBrakeRaw = " + (String)analogValueBrakeRaw + " / analogValueBrakeMinCalibRaw = " + (String)analogValueBrakeMinCalibRaw+ " / analogValueBrake = " + (String)analogValueBrake);
 #endif
 
