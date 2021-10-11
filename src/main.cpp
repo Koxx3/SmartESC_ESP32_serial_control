@@ -50,7 +50,7 @@ char USB_rx_buffer[64];
 uint8_t USB_rx_buffer_pointer;
 uint8_t bufStartFrame; // Buffer Start Frame
 byte *p;               // Pointer declaration for the new received data
-byte incomingByte;
+byte incomingByte[1];
 byte incomingBytePrev;
 String USB_command;
 
@@ -258,8 +258,9 @@ void Receive()
   // Check for new data availability in the Serial buffer
   if (hwSerCntrl.available())
   {
-    incomingByte = hwSerCntrl.read(); // Read the incoming byte
-    bufStartFrame = incomingByte;     // Construct the start frame
+    incomingByte[0] = hwSerCntrl.read(); // Read the incoming byte
+    bufStartFrame = incomingByte[0];     // Construct the start frame
+    Serial.write((uint8_t *)&incomingByte, 1); // pipe the character to the USB serial
   }
   else
   {
@@ -279,13 +280,13 @@ void Receive()
     // Initialize if new data is detected
     //Serial.println("SERIAL_START_FRAME_ESC_TO_DISPLAY detected");
     p = (byte *)&newFeedback;
-    *p++ = incomingByte;
+    *p++ = incomingByte[0];
     idx = 1;
     //Serial.printf(">>>\nincomingByte = %02x / idx = %d\n",incomingByte, idx -1 );
   }
   else if (idx >= 1 && idx < sizeof(SerialFeedback))
   { // Save the new received data
-    *p++ = incomingByte;
+    *p++ = incomingByte[0];
     idx++;
     //Serial.printf("incomingByte = %02x / idx = %d\n",incomingByte, idx -1);
   }
@@ -380,7 +381,7 @@ void Receive()
   }
 
   // Update previous states
-  incomingBytePrev = incomingByte;
+  incomingBytePrev = incomingByte[0];
 }
 
 void Receive_USB()
