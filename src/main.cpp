@@ -24,10 +24,11 @@
 // *******************************************************************
 
 #include <Arduino.h>
+#include <crc.h>
 
 // ########################## DEFINES ##########################
 #define HOVER_SERIAL_BAUD 57600               // [-] Baud rate for Serial (used to communicate with the hoverboard)
-#define SERIAL_BAUD 57600                     // [-] Baud rate for built-in Serial (used for the Serial Monitor)
+#define SERIAL_BAUD 921600                     // [-] Baud rate for built-in Serial (used for the Serial Monitor)
 #define SERIAL_START_FRAME_ESC_TO_DISPLAY 0x5A // [-] Start frame definition for serial commands
 #define SERIAL_START_FRAME_DISPLAY_TO_ESC 0xA5 // [-] Start frame definition for serial commands
 #define TIME_SEND 100                           // [ms] Sending time interval
@@ -39,13 +40,14 @@
 #define PIN_IN_ATHROTTLE 39        //Throttle
 #define SECURITY_OFFSET               50
 
-#define BAUD_RATE_SMARTESC            57600
+#define BAUD_RATE_SMARTESC            115200
 #define PIN_SERIAL_ESP_TO_CNTRL       27
 #define PIN_SERIAL_CNTRL_TO_ESP       14
 
 // Global variables
 uint8_t idx = 0;       // Index for new data pointer
-uint8_t tx_buffer[12] = {0xAA, 0x00, 0x00,0x06,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00}; 
+
+uint8_t payload[5];
 char USB_rx_buffer[64];
 uint8_t USB_rx_buffer_pointer;
 uint8_t bufStartFrame; // Buffer Start Frame
@@ -201,7 +203,7 @@ void setup()
 }
 
 // ########################## SEND ##########################
-void Send(int16_t brake, int16_t throttle)
+void Send(int32_t brake, int32_t throttle)
 {
   /*
   // Create command
@@ -235,21 +237,22 @@ void Send(int16_t brake, int16_t throttle)
 */
 
 //00 00 00 10 00 00 00 FF 00 00 00 00
+volatile uint8_t tx_buffer[10] = {0x02, 0x05, 0x06,0x00,0x00,0x00,0x00,0x00,0x00,0x03}; 
+throttle=throttle *-20;
+tx_buffer[6] = (throttle & 0xff); 
+tx_buffer[5] = (throttle >> 8) & 0xff; 
+tx_buffer[4] = (throttle >> 16) & 0xff; 
+tx_buffer[3] = (throttle >> 24) & 0xff; 
+memcpy((uint8_t *)&payload,(uint8_t *)&tx_buffer+2,5);
 
-throttle=throttle *2;
-tx_buffer[7] = (throttle & 0xff); 
-tx_buffer[8] = (throttle >> 8) & 0xff; 
-tx_buffer[4] = 0; 
-uint8_t chkSum = 0;
+uint16_t checksum = crc16((uint8_t *)&payload, 5);
+tx_buffer[7] = checksum >>8 & 0xFF;
+tx_buffer[8] = checksum & 0xFF;
 
-for (uint8_t i = 0; i < 11; i++) {
-			chkSum ^= tx_buffer[i];
-}
-tx_buffer[11] = chkSum;
-//Serial.printf("command2.h = %02x / command2.i = %02x\n", command2.h, command2.i);
+//Serial.println( payload[2]);
 
   // Write to Serial
-  hwSerCntrl.write((uint8_t *)&tx_buffer, sizeof(tx_buffer));
+  hwSerCntrl.write((uint8_t *)&tx_buffer, 10);
 }
 
 // ########################## RECEIVE ##########################
@@ -411,7 +414,7 @@ void Process_USB_command(String command)
 {
   
     if (command == "autodetect"){
-      tx_buffer[7] = 0; 
+     /* tx_buffer[7] = 0; 
       tx_buffer[8] = 0; 
       tx_buffer[4] = 1; 
       uint8_t chkSum = 0;
@@ -423,6 +426,7 @@ void Process_USB_command(String command)
       // Write to Serial
       hwSerCntrl.write((uint8_t *)&tx_buffer, sizeof(tx_buffer));
       Serial.print("command executed!\r\n");
+      */
     }
     else if (command == "help"){
     Serial.print("Implemented commands:\r\n\autodetect : find motorspecific hall/phase configuration\r\n");
